@@ -1,8 +1,6 @@
-# GalaxyMPS: Advanced Particle-Based Galaxy Simulator
+# SwiftUI MPS NBody Particle Simulator
 
-GalaxyMPS is a powerful MacOS application for simulating galaxies, universe expansion, and galactic collisions using GPU-accelerated particle simulations with Metal Performance Shaders (MPS). The application renders thousands of particles in real-time, creating stunning visualizations of cosmic phenomena while allowing extensive user customization.
-
-![GalaxyMPS Screenshot](screenshot.png)
+SwiftUI MPS NBody Particle Simulator is a powerful MacOS application for simulating galaxies, universe expansion, and galactic collisions using GPU-accelerated particle simulations with Metal Performance Shaders (MPS). The application renders thousands of particles in real-time, creating stunning visualizations of cosmic phenomena while allowing extensive user customization.
 
 ## Features
 
@@ -36,28 +34,25 @@ GalaxyMPS is a powerful MacOS application for simulating galaxies, universe expa
 
 ## System Requirements
 
-- macOS 10.15 (Catalina) or newer
 - Mac with Metal-compatible GPU
-- Minimum 4GB RAM (8GB+ recommended for larger simulations)
 
 ## Build Instructions
 
 ### Prerequisites
 - Xcode 12.0 or newer
 - Swift 5.3 or newer
-- Git
 
 ### Steps to Build
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/galaxymps.git
-cd galaxymps
+git clone https://github.com/dlnetworks/swiftui-mps-nbody-particle-simulator.git
+cd swiftui-mps-nbody-particle-simulator
 ```
 
 2. Open the project in Xcode:
 ```bash
-open galaxymps.xcodeproj
+open swiftui-mps-nbody-particle-simulator.xcodeproj
 ```
 
 3. Select your target device (your Mac)
@@ -72,10 +67,8 @@ open galaxymps.xcodeproj
 - **Hide/Show Controls**: Click the hamburger menu (≡) in the top-left corner
 
 ### Keyboard Shortcuts
-- **Spacebar**: Start/Pause simulation
 - **R**: Reset simulation
 - **C**: Generate new random colors (when "Use Random Colors" is enabled)
-- **A**: Toggle auto mode
 
 ### Simulation Settings
 
@@ -127,7 +120,6 @@ open galaxymps.xcodeproj
 4. **Visualization Tips**:
    - Use random colors for more visually distinct galaxy components
    - Enable camera orbit on multiple axes for cinematic views
-   - Press "A" to toggle auto mode for hands-free demonstrations
 
 ## Troubleshooting
 
@@ -136,12 +128,8 @@ open galaxymps.xcodeproj
 - **Crash on Startup**: Ensure your Mac has a Metal-compatible GPU and meets system requirements
 - **Visual Glitches**: Reset the simulation or restart the application
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgements
 
-- Metal Performance Shaders framework by Apple
-- SwiftUI for the user interface
-- Inspiration from real astrophysical simulations and phenomena
+- 100% of this code was generated using ChatGPT and ClaudeAI. Please direct any bug reports
+  or problems to either one of them.
+- Mainly based on https://github.com/N0rvel/galaxy_sim
