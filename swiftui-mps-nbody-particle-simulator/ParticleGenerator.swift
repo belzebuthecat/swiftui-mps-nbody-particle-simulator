@@ -62,14 +62,21 @@ struct ParticleGenerator {
                 let radiusFactor = sqrt(Float.random(in: 0..<100))
                 let rr = radius * radiusFactor
                 let spiralTightness: Float = 5.0
-                let baseAngle = pow(rr, 0.15) * spiralTightness * 0.4
-                let armOffset = (Float(i % Int(armCount))) * armSeparation
-                let targetAngle = baseAngle + armOffset
-
-                // distanza angolare dal centro braccio con offset esponenziale
-                let deviation = Float.random(in: -100...100)
-                let decay = exp(-rr / (radius * 0.8))
-                let angle = targetAngle + deviation * decay * 0.5
+                
+                let angle: Float
+                if rr < radius * 0.2 {
+                    angle = Float.random(in: 0..<2 * Float.pi)
+                } else {
+                    let armCount: Float = 6
+                    let armSeparation = (4.0 * Float.pi) / armCount
+                    let spiralTightness: Float = 5.0
+                    let baseAngle = pow(rr, 0.15) * spiralTightness * 0.4
+                    let armOffset = Float.random(in: 0..<armCount) * armSeparation
+                    let targetAngle = baseAngle + armOffset
+                    let angleNoise = Float.random(in: -1...1)
+                    let clarity = pow((rr - radius * 0.2) / (radius * 0.8), 1.5)
+                    angle = targetAngle + angleNoise * (1.0 - clarity) * 0.7
+                }
 
                 let x = rr * cos(angle)
                 let z = rr * sin(angle)
@@ -106,11 +113,30 @@ struct ParticleGenerator {
             var maxSpeedFirstGalaxy: Float = 0
             var maxSpeedSecondGalaxy: Float = 0
             for i in 0..<halfCount {
-                let rr = sqrt(Float.random(in: 0...1)) * R
-                let angle = Float.random(in: 0..<2 * Float.pi)
+                let armCount: Float = 6
+                let armSeparation = (4.0 * Float.pi) / armCount
+                let radiusFactor = sqrt(Float.random(in: 0..<10))
+                let rr = radius * radiusFactor
+                let spiralTightness: Float = 5.0
+                
+                let angle: Float
+                if rr < radius * 0.2 {
+                    angle = Float.random(in: 0..<2 * Float.pi)
+                } else {
+                    let armCount: Float = 6
+                    let armSeparation = (4.0 * Float.pi) / armCount
+                    let spiralTightness: Float = 5.0
+                    let baseAngle = pow(rr, 0.15) * spiralTightness * 0.4
+                    let armOffset = Float.random(in: 0..<armCount) * armSeparation
+                    let targetAngle = baseAngle + armOffset
+                    let angleNoise = Float.random(in: -1...1)
+                    let clarity = pow((rr - radius * 0.2) / (radius * 0.8), 1.5)
+                    angle = targetAngle + angleNoise * (1.0 - clarity) * 0.7
+                }
+
                 let x_flat = rr * cos(angle)
                 let z_flat = rr * sin(angle)
-                let y_flat = thickness * 0.5 * Float.random(in: -1...1)
+                let y_flat = thickness * 0.5 * Float.random(in: -1...1) * exp(-rr / radius)
                 var flatPos = simd_float3(x_flat, y_flat, z_flat)
                 flatPos = matrix_multiply(firstRotation, flatPos)
                 flatPos.x -= radius * 1.5
@@ -133,11 +159,30 @@ struct ParticleGenerator {
             }
             for j in 0..<halfCount {
                 let i = halfCount + j
-                let rr = sqrt(Float.random(in: 0...1)) * R
-                let angle = Float.random(in: 0..<2 * Float.pi)
+                let armCount: Float = 6
+                let armSeparation = (4.0 * Float.pi) / armCount
+                let radiusFactor = sqrt(Float.random(in: 0..<100))
+                let rr = radius * radiusFactor
+                let spiralTightness: Float = 5.0
+                
+                let angle: Float
+                if rr < radius * 0.2 {
+                    angle = Float.random(in: 0..<2 * Float.pi)
+                } else {
+                    let armCount: Float = 6
+                    let armSeparation = (4.0 * Float.pi) / armCount
+                    let spiralTightness: Float = 5.0
+                    let baseAngle = pow(rr, 0.15) * spiralTightness * 0.4
+                    let armOffset = Float.random(in: 0..<armCount) * armSeparation
+                    let targetAngle = baseAngle + armOffset
+                    let angleNoise = Float.random(in: -1...1)
+                    let clarity = pow((rr - radius * 0.2) / (radius * 0.8), 1.5)
+                    angle = targetAngle + angleNoise * (1.0 - clarity) * 0.7
+                }
+
                 let x_flat = rr * cos(angle)
                 let z_flat = rr * sin(angle)
-                let y_flat = thickness * 0.5 * Float.random(in: -1...1)
+                let y_flat = thickness * 0.5 * Float.random(in: -1...1) * exp(-rr / radius)
                 var flatPos = simd_float3(x_flat, y_flat, z_flat)
                 flatPos = matrix_multiply(secondRotation, flatPos)
                 flatPos.x += radius * 1.5

@@ -34,6 +34,7 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
     let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let renderPipeline: MTLRenderPipelineState
+    private var gravityPipeline: MTLComputePipelineState!
     
     private var positionBufferA: MTLBuffer!
     private var positionBufferB: MTLBuffer!
@@ -105,6 +106,10 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
         guard let device = MTLCreateSystemDefaultDevice() else { fatalError("Metal GPU device not available") }
         self.device = device
         self.commandQueue = device.makeCommandQueue()!
+        let computeLibrary = device.makeDefaultLibrary()!
+        if let gravityFunc = computeLibrary.makeFunction(name: "compute_gravity") {
+            gravityPipeline = try? device.makeComputePipelineState(function: gravityFunc)
+        }
         let library = device.makeDefaultLibrary()!
         guard let vertexFunc = library.makeFunction(name: "particleVertexShader"),
               let fragFunc = library.makeFunction(name: "particleFragmentShader") else {
@@ -118,9 +123,9 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
         renderDesc.colorAttachments[0].rgbBlendOperation = .add
         renderDesc.colorAttachments[0].alphaBlendOperation = .add
         renderDesc.colorAttachments[0].sourceRGBBlendFactor = .one
-        renderDesc.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        renderDesc.colorAttachments[0].destinationRGBBlendFactor = .one
         renderDesc.colorAttachments[0].sourceAlphaBlendFactor = .one
-        renderDesc.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        renderDesc.colorAttachments[0].destinationAlphaBlendFactor = .one
         do {
             renderPipeline = try device.makeRenderPipelineState(descriptor: renderDesc)
         } catch {
@@ -515,100 +520,114 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
         
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
         
-        func draw(in view: MTKView) {
-            guard let drawable = view.currentDrawable,
-                  let renderPassDescriptor = view.currentRenderPassDescriptor else { return }
-            
-            updateSimParams()
-            
-            // Update camera transition if in progress
-            if isTransitioning {
-                updateCameraTransition()
-            }
-            
-            // Handle continuous camera adjustment in auto mode
-            let currentTime = CACurrentMediaTime()
-            if settingsRef.isRunning && autoModeEnabled && (currentTime - lastCameraAdjustmentTime >= cameraAdjustmentInterval) {
-                if !isTransitioning {
-                    adjustCameraForOptimalView()
-                    lastCameraAdjustmentTime = currentTime
-                }
-            }
-            
-            // Handle auto restart
-            if autoModeEnabled {
-                let intervalInSeconds = autoRestartInterval * 60
-                
-                if lastAutoRestartTime == 0 || (currentTime - lastAutoRestartTime) >= intervalInSeconds {
-                    autoRestartSimulation()
-                    lastAutoRestartTime = currentTime
-                }
-            }
-            
-            // Handle orbiting camera
-            if isOrbiting {
-                if orbitX {
-                    cameraPitch += orbitSpeed * 0.01
-                }
-                
-                if orbitY {
-                    cameraYaw += orbitSpeed * 0.01
-                }
-                
-                if orbitZ {
-                    cameraRoll += orbitSpeed * 0.01
-                }
-            }
-            
-            // Handle simulation update
-            if settingsRef.isRunning {
-                let posInBuffer  = usingBufferA ? positionBufferA! : positionBufferB!
-                let posOutBuffer = usingBufferA ? positionBufferB! : positionBufferA!
-                if let commandBuffer = commandQueue.makeCommandBuffer() {
-                    mpsSimulation.encode(commandBuffer: commandBuffer,
-                                           posInBuffer: posInBuffer,
-                                           velocityBuffer: velocityBuffer,
-                                           posOutBuffer: posOutBuffer)
-                    commandBuffer.commit()
-                }
-                usingBufferA.toggle()
-            }
-            
-            // Render particles
-            if let commandBuffer2 = commandQueue.makeCommandBuffer(),
-               let renderEncoder = commandBuffer2.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
-                renderEncoder.setRenderPipelineState(renderPipeline)
-                let currentPosBuffer = usingBufferA ? positionBufferA! : positionBufferB!
-                renderEncoder.setVertexBuffer(currentPosBuffer, offset: 0, index: 0)
-                renderEncoder.setVertexBuffer(colorBuffer, offset: 0, index: 1)
-                renderEncoder.setVertexBuffer(sizeBuffer, offset: 0, index: 2)
-                var mvpMatrix = computeViewProjectionMatrix(aspect: Float(view.drawableSize.width / view.drawableSize.height))
-                renderEncoder.setVertexBytes(&mvpMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
-                renderEncoder.setFragmentBuffer(paramsBuffer, offset: 0, index: 0)
-                renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: settingsRef.particleCount)
-                renderEncoder.endEncoding()
-                commandBuffer2.present(drawable)
-                commandBuffer2.commit()
-            }
-            
-            // Calculate FPS
-            let currentFrameTime = CACurrentMediaTime()
-            frameCount += 1
-            
-            if lastFrameTime == 0 {
-                lastFrameTime = currentFrameTime
-            }
-            
-            let elapsed = currentFrameTime - lastFrameTime
-            if elapsed >= 1.0 {
-                let fps = Int(Double(frameCount) / elapsed)
-                DispatchQueue.main.async {
-                    self.currentFPS = fps
-                }
-                frameCount = 0
-                lastFrameTime = currentFrameTime
+    func draw(in view: MTKView) {
+        guard let drawable = view.currentDrawable,
+              let renderPassDescriptor = view.currentRenderPassDescriptor else { return }
+        
+        updateSimParams()
+        
+        // Update camera transition if in progress
+        if isTransitioning {
+            updateCameraTransition()
+        }
+        
+        // Handle continuous camera adjustment in auto mode
+        let currentTime = CACurrentMediaTime()
+        if settingsRef.isRunning && autoModeEnabled && (currentTime - lastCameraAdjustmentTime >= cameraAdjustmentInterval) {
+            if !isTransitioning {
+                adjustCameraForOptimalView()
+                lastCameraAdjustmentTime = currentTime
             }
         }
+        
+        // Handle auto restart
+        if autoModeEnabled {
+            let intervalInSeconds = autoRestartInterval * 60
+            
+            if lastAutoRestartTime == 0 || (currentTime - lastAutoRestartTime) >= intervalInSeconds {
+                autoRestartSimulation()
+                lastAutoRestartTime = currentTime
+            }
+        }
+        
+        // Handle orbiting camera
+        if isOrbiting {
+            if orbitX {
+                cameraPitch += orbitSpeed * 0.01
+            }
+            
+            if orbitY {
+                cameraYaw += orbitSpeed * 0.01
+            }
+            
+            if orbitZ {
+                cameraRoll += orbitSpeed * 0.01
+            }
+        }
+        
+        // Handle simulation update
+        if settingsRef.isRunning {
+            let posInBuffer  = usingBufferA ? positionBufferA! : positionBufferB!
+            let posOutBuffer = usingBufferA ? positionBufferB! : positionBufferA!
+            // --- BEGIN gravity compute kernel ---
+            if let gravityPipeline = gravityPipeline,
+               let commandBuffer = commandQueue.makeCommandBuffer(),
+               let encoder = commandBuffer.makeComputeCommandEncoder() {
+                encoder.setComputePipelineState(gravityPipeline)
+                encoder.setBuffer(posInBuffer, offset: 0, index: 0)
+                encoder.setBuffer(velocityBuffer, offset: 0, index: 1)
+                let count = settingsRef.particleCount
+                encoder.dispatchThreads(MTLSize(width: count, height: 1, depth: 1),
+                                        threadsPerThreadgroup: MTLSize(width: 32, height: 1, depth: 1))
+                encoder.endEncoding()
+                commandBuffer.commit()
+            }
+            // --- END gravity compute kernel ---
+            if let commandBuffer = commandQueue.makeCommandBuffer() {
+                mpsSimulation.encode(commandBuffer: commandBuffer,
+                                       posInBuffer: posInBuffer,
+                                       velocityBuffer: velocityBuffer,
+                                       posOutBuffer: posOutBuffer)
+                commandBuffer.commit()
+            }
+            usingBufferA.toggle()
+        }
+        
+        // Render particles
+        if let commandBuffer2 = commandQueue.makeCommandBuffer(),
+           let renderEncoder = commandBuffer2.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
+            renderEncoder.setRenderPipelineState(renderPipeline)
+            let currentPosBuffer = usingBufferA ? positionBufferA! : positionBufferB!
+            renderEncoder.setVertexBuffer(currentPosBuffer, offset: 0, index: 0)
+            renderEncoder.setVertexBuffer(colorBuffer, offset: 0, index: 1)
+            renderEncoder.setVertexBuffer(sizeBuffer, offset: 0, index: 2)
+            var mvpMatrix = computeViewProjectionMatrix(aspect: Float(view.drawableSize.width / view.drawableSize.height))
+            renderEncoder.setVertexBytes(&mvpMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
+            renderEncoder.setFragmentBuffer(paramsBuffer, offset: 0, index: 0)
+            renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: settingsRef.particleCount)
+            renderEncoder.endEncoding()
+            commandBuffer2.present(drawable)
+            commandBuffer2.commit()
+        }
+        
+        // Calculate FPS
+        let currentFrameTime = CACurrentMediaTime()
+        frameCount += 1
+        
+        if lastFrameTime == 0 {
+            lastFrameTime = currentFrameTime
+        }
+        
+        let elapsed = currentFrameTime - lastFrameTime
+        if elapsed >= 1.0 {
+            let fps = Int(Double(frameCount) / elapsed)
+            DispatchQueue.main.async {
+                self.currentFPS = fps
+            }
+            frameCount = 0
+            lastFrameTime = currentFrameTime
+        }
+    }
         
         private func computeViewProjectionMatrix(aspect: Float) -> matrix_float4x4 {
             // Create rotation matrices for each axis
