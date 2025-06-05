@@ -213,15 +213,9 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
         // Calculate bounding box
         var minPos = simd_float3(Float.greatestFiniteMagnitude, Float.greatestFiniteMagnitude, Float.greatestFiniteMagnitude)
         var maxPos = simd_float3(-Float.greatestFiniteMagnitude, -Float.greatestFiniteMagnitude, -Float.greatestFiniteMagnitude)
-        
-        for i in 0..<count {
-            let pos = positions[i]
-            minPos.x = min(minPos.x, pos.x)
-            minPos.y = min(minPos.y, pos.y)
-            minPos.z = min(minPos.z, pos.z)
-            maxPos.x = max(maxPos.x, pos.x)
-            maxPos.y = max(maxPos.y, pos.y)
-            maxPos.z = max(maxPos.z, pos.z)
+        for pos in positions {
+            minPos = simd_min(minPos, pos)
+            maxPos = simd_max(maxPos, pos)
         }
         
         // Calculate box dimensions

@@ -24,7 +24,7 @@ struct ContentView: View {
                 Image(systemName: "line.horizontal.3")
                     .font(.system(size: 12))
                     .padding()
-                    .background(Color.black.opacity(0.5))
+                    .background(Color.green.opacity(0.5))
                     .clipShape(Circle())
             }
             .padding(.top, 10)
@@ -39,6 +39,9 @@ struct ContentView: View {
                         }
                     }
                     .pickerStyle(SegmentedPickerStyle())
+                    .padding(5)
+                    .background(Color.white.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     
                     HStack {
                         Button(action: { settings.isRunning.toggle() }) {
@@ -105,7 +108,7 @@ struct ContentView: View {
                         Slider(value: Binding(
                             get: { Double(settings.particleCount) },
                             set: { settings.particleCount = Int($0) }),
-                               in: 1000...100000)
+                               in: 1000...1000000)
                         
                         Text("Min Particle Size: \(String(format: "%.2f", settings.minParticleSize))")
                         Slider(value: $settings.minParticleSize, in: 0.01...1.0)
@@ -232,9 +235,10 @@ struct ContentView: View {
                 }
                 .padding(.top, 40)
                 .padding()
+                .foregroundColor(.white)
             }
             .frame(width: 300)
-            .background(Color.black.opacity(0.6))
+            .background(Color(white: 0.1).opacity(0.8))
             .offset(x: controlsOffset)
             .animation(nil, value: controlsOffset)
             .zIndex(1)
@@ -249,7 +253,7 @@ struct ContentView: View {
                 }
             }
             .font(.system(size: 32, weight: .bold))
-            .foregroundColor(Color.white.opacity(0.5))
+            .foregroundColor(Color.white.opacity(1.0))
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .zIndex(2)

@@ -56,17 +56,31 @@ struct ParticleGenerator {
             let R = max(radius, 1.0)
             var maxSpeed: Float = 0
             for i in 0..<count {
-                let rr = sqrt(Float.random(in: 0...1)) * R
-                let angle = Float.random(in: 0..<2 * Float.pi)
+                let t = Float(i) / Float(count)
+                let armCount: Float = 6
+                let armSeparation = (4.0 * Float.pi) / armCount
+                let radiusFactor = sqrt(Float.random(in: 0..<100))
+                let rr = radius * radiusFactor
+                let spiralTightness: Float = 5.0
+                let baseAngle = pow(rr, 0.15) * spiralTightness * 0.4
+                let armOffset = (Float(i % Int(armCount))) * armSeparation
+                let targetAngle = baseAngle + armOffset
+
+                // distanza angolare dal centro braccio con offset esponenziale
+                let deviation = Float.random(in: -100...100)
+                let decay = exp(-rr / (radius * 0.8))
+                let angle = targetAngle + deviation * decay * 0.5
+
                 let x = rr * cos(angle)
                 let z = rr * sin(angle)
-                let y = thickness * 0.5 * Float.random(in: -1...1)
+                let y = thickness * 0.5 * Float.random(in: -1...1) * exp(-rr / radius)
                 positions[i] = simd_float3(x, y, z)
+
                 let sizeFactor = sqrt(minParticleSize / sizes[i])
                 let vx = -sin(angle)
                 let vz = cos(angle)
-                var speed = initialSpeed * sqrt(rr / max(1, R)) * sizeFactor
-                let coreThreshold = R * 0.3
+                var speed = initialSpeed * sqrt(rr / max(1, radius)) * sizeFactor
+                let coreThreshold = radius * 0.3
                 if rr < coreThreshold {
                     let extra = initialCoreSpin * (coreThreshold - rr) / coreThreshold
                     speed += extra
