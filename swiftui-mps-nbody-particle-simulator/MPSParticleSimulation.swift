@@ -2,8 +2,10 @@ import MetalPerformanceShaders
 
 class MPSParticleSimulation: MPSKernel {
     
-    public var blackHoleJustIngested: Bool = false
-    var hasRecentlyAccretedParticle: Bool = false
+public var blackHoleJustIngested: Bool = false
+public var hasRecentlyAccretedParticle: Bool {
+    return blackHoleJustIngested
+}
     
     var pipelineState: MTLComputePipelineState
     var paramsBuffer: MTLBuffer
