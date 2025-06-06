@@ -62,29 +62,33 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
         var secondBlackHoleAccretionRadius: Float
         var secondBlackHoleSpin: Float
         var particleOpacity: Float
+        var blackHoleRecentlyAccreted: UInt32
         var _padding: simd_float3
         var _extraPadding: simd_float4
     }
-    private var simParams = SimParams(deltaTime: 0.1,
-                                      gravitationalConstant: 1.0,
-                                      smoothingLength: 100,
-                                      particleCount: 0,
-                                      interactionSkip: 1,
-                                      bloom: 1.0,
-                                      colorMix: 0.0,
-                                      blackHoleEnabled: 1,
-                                      blackHoleMass: 0,
-                                      blackHolePosition: simd_float4(0,0,0,0),
-                                      blackHoleAccretionRadius: 0.0,
-                                      blackHoleSpin: 0.0,
-                                      secondBlackHoleEnabled: 1,
-                                      secondBlackHoleMass: 0,
-                                      secondBlackHolePosition: simd_float4(0,0,0,0),
-                                      secondBlackHoleAccretionRadius: 0.0,
-                                      secondBlackHoleSpin: 0.0,
-                                      particleOpacity: 0.25,
-                                      _padding: simd_float3(0, 0, 0),
-                                      _extraPadding: simd_float4(0, 0, 0 ,0))
+    private var simParams = SimParams(
+        deltaTime: 0.1,
+        gravitationalConstant: 1.0,
+        smoothingLength: 100,
+        particleCount: 0,
+        interactionSkip: 1,
+        bloom: 1.0,
+        colorMix: 0.0,
+        blackHoleEnabled: 1,
+        blackHoleMass: 0,
+        blackHolePosition: simd_float4(0,0,0,0),
+        blackHoleAccretionRadius: 0.0,
+        blackHoleSpin: 0.0,
+        secondBlackHoleEnabled: 1,
+        secondBlackHoleMass: 0,
+        secondBlackHolePosition: simd_float4(0,0,0,0),
+        secondBlackHoleAccretionRadius: 0.0,
+        secondBlackHoleSpin: 0.0,
+        particleOpacity: 0.25,
+        blackHoleRecentlyAccreted: 0,
+        _padding: simd_float3(0, 0, 0),
+        _extraPadding: simd_float4(0, 0, 0 ,0)
+    )
     
     private var paramsBuffer: MTLBuffer!
     
@@ -445,6 +449,9 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
                 gravityMultiplier: Float(settingsRef.blackHoleGravityMultiplier)
             )
             
+            // Flare effect: set blackHoleRecentlyAccreted flag based on simulation
+            simParams.blackHoleRecentlyAccreted = mpsSimulation.hasRecentlyAccretedParticle ? 1 : 0
+            
             let paramsPointer = paramsBuffer.contents().bindMemory(to: SimParams.self, capacity: 1)
             paramsPointer.pointee = simParams
         }
@@ -523,14 +530,14 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
     func draw(in view: MTKView) {
         guard let drawable = view.currentDrawable,
               let renderPassDescriptor = view.currentRenderPassDescriptor else { return }
-        
+
         updateSimParams()
-        
+
         // Update camera transition if in progress
         if isTransitioning {
             updateCameraTransition()
         }
-        
+
         // Handle continuous camera adjustment in auto mode
         let currentTime = CACurrentMediaTime()
         if settingsRef.isRunning && autoModeEnabled && (currentTime - lastCameraAdjustmentTime >= cameraAdjustmentInterval) {
@@ -539,32 +546,32 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
                 lastCameraAdjustmentTime = currentTime
             }
         }
-        
+
         // Handle auto restart
         if autoModeEnabled {
             let intervalInSeconds = autoRestartInterval * 60
-            
+
             if lastAutoRestartTime == 0 || (currentTime - lastAutoRestartTime) >= intervalInSeconds {
                 autoRestartSimulation()
                 lastAutoRestartTime = currentTime
             }
         }
-        
+
         // Handle orbiting camera
         if isOrbiting {
             if orbitX {
                 cameraPitch += orbitSpeed * 0.01
             }
-            
+
             if orbitY {
                 cameraYaw += orbitSpeed * 0.01
             }
-            
+
             if orbitZ {
                 cameraRoll += orbitSpeed * 0.01
             }
         }
-        
+
         // Handle simulation update
         if settingsRef.isRunning {
             let posInBuffer  = usingBufferA ? positionBufferA! : positionBufferB!
@@ -592,8 +599,12 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
             }
             usingBufferA.toggle()
         }
-        
-        // Render particles
+
+        // Imposta loadAction condizionalmente: usa .clear se camera o zoom si muovono, altrimenti .load
+        let isCameraStatic = !(isOrbiting || isTransitioning || lastMouseLocation != nil)
+        renderPassDescriptor.colorAttachments[0].loadAction = isCameraStatic ? .load : .clear
+
+        // Render particles and black hole glow
         if let commandBuffer2 = commandQueue.makeCommandBuffer(),
            let renderEncoder = commandBuffer2.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
             renderEncoder.setRenderPipelineState(renderPipeline)
@@ -604,20 +615,64 @@ class SimulationRenderer: NSObject, MTKViewDelegate, ObservableObject {
             var mvpMatrix = computeViewProjectionMatrix(aspect: Float(view.drawableSize.width / view.drawableSize.height))
             renderEncoder.setVertexBytes(&mvpMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
             renderEncoder.setFragmentBuffer(paramsBuffer, offset: 0, index: 0)
+
+            // --- Draw black hole aura/glow before particles ---
+            if settingsRef.blackHoleEnabled {
+                let blackHolePosition = simParams.blackHolePosition
+                // L'aura cresce con la massa del buco nero
+                var auraSize: Float = 20.0 + simParams.blackHoleMass * 0.5
+                // Opacità dinamica in base alla massa (opzionale, qui solo massa)
+                let baseAlpha: Float = 0.6
+                let dynamicAlpha = min(1.0, baseAlpha + simParams.blackHoleMass * 0.005)
+                var auraColor = SIMD4<Float>(1.0, 0.3, 0.0, dynamicAlpha) // Arancione luminoso
+
+                // Flare effect: se il buco nero ha appena accresciuto una particella, cambia colore e dimensione
+                if simParams.blackHoleRecentlyAccreted == 1 {
+                    auraColor = SIMD4<Float>(1.0, 1.0, 0.0, 1.0) // Giallo brillante per flare
+                    auraSize *= 1.5
+                }
+
+                // auraData: [pos.xyz, color.xyz, size.xyz]
+                let auraColor3 = SIMD3<Float>(auraColor.x, auraColor.y, auraColor.z)
+                var auraData = [simd_make_float3(blackHolePosition), auraColor3, SIMD3<Float>(repeating: auraSize)]
+                renderEncoder.setVertexBytes(&auraData, length: MemoryLayout<SIMD3<Float>>.stride * 3, index: 4)
+                // NOTE: The particleVertexShader must interpret index 4 as the black hole aura data for vertexCount=1
+                renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: 1)
+
+                // --- Orizzonte degli eventi: bordo statico ---
+                let eventHorizonSize: Float = auraSize * 0.9
+                let eventHorizonAlpha: Float = 0.8
+                var horizonColor = SIMD4<Float>(1.0, 1.0, 1.0, eventHorizonAlpha) // Bianco acceso
+                let horizonColor3 = SIMD3<Float>(horizonColor.x, horizonColor.y, horizonColor.z)
+                var horizonData = [simd_make_float3(blackHolePosition), horizonColor3, SIMD3<Float>(repeating: eventHorizonSize)]
+                renderEncoder.setVertexBytes(&horizonData, length: MemoryLayout<SIMD3<Float>>.stride * 3, index: 4)
+                renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: 1)
+
+                // Disegna un secondo alone esteso e più trasparente
+                let outerAuraSize: Float = auraSize * 2.0
+                let outerAlpha: Float = dynamicAlpha * 0.3
+                var outerAuraColor = SIMD4<Float>(0.8, 0.4, 0.0, outerAlpha)
+                let outerAuraColor3 = SIMD3<Float>(outerAuraColor.x, outerAuraColor.y, outerAuraColor.z)
+                var outerAuraData = [simd_make_float3(blackHolePosition), outerAuraColor3, SIMD3<Float>(repeating: outerAuraSize)]
+                renderEncoder.setVertexBytes(&outerAuraData, length: MemoryLayout<SIMD3<Float>>.stride * 3, index: 4)
+                renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: 1)
+            }
+
+            // --- Draw particles ---
             renderEncoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: settingsRef.particleCount)
             renderEncoder.endEncoding()
             commandBuffer2.present(drawable)
             commandBuffer2.commit()
         }
-        
+
         // Calculate FPS
         let currentFrameTime = CACurrentMediaTime()
         frameCount += 1
-        
+
         if lastFrameTime == 0 {
             lastFrameTime = currentFrameTime
         }
-        
+
         let elapsed = currentFrameTime - lastFrameTime
         if elapsed >= 1.0 {
             let fps = Int(Double(frameCount) / elapsed)
