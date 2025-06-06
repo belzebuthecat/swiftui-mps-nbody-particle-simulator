@@ -49,7 +49,11 @@ struct ParticleGenerator {
                 let speed = simd_length(velocities[i])
                 let maxSpeed = initialSpeed * 1.5
                 let t = min(speed / maxSpeed, 1.0)
-                colors[i] = simd_float4(velocityToColor(t, settings), Float(settings.particleOpacity))
+                let massFactor = min(max(sizes[i] / maxParticleSize, 0.0), 1.0)
+                let colorVec = velocityToColor(t, settings)
+                let adjustedColor = mix(SIMD3<Float>(Float(0.2), Float(0.2), Float(0.2)), colorVec, Float(massFactor))
+                let alpha = 0.6 * (1.0 - massFactor) + 1.0 * massFactor
+                colors[i] = simd_float4(adjustedColor, alpha * Float(settings.particleOpacity))
             }
             
         case .galaxy:
@@ -98,7 +102,11 @@ struct ParticleGenerator {
             for i in 0..<count {
                 let speed = simd_length(velocities[i])
                 let t = min(speed / maxSpeed, 1.0)
-                colors[i] = simd_float4(velocityToColor(t, settings), Float(settings.particleOpacity))
+                let massFactor = min(max(sizes[i] / maxParticleSize, 0.0), 1.0)
+                let colorVec = velocityToColor(t, settings)
+                let adjustedColor = mix(SIMD3<Float>(Float(0.2), Float(0.2), Float(0.2)), colorVec, Float(massFactor))
+                let alpha = 0.6 * (1.0 - massFactor) + 1.0 * massFactor
+                colors[i] = simd_float4(adjustedColor, alpha * Float(settings.particleOpacity))
             }
             
         case .collision:
@@ -207,13 +215,23 @@ struct ParticleGenerator {
                 let speed = simd_length(velocities[i])
                 let maxSpeed = i < halfCount ? maxSpeedFirstGalaxy : maxSpeedSecondGalaxy
                 let t = min(speed / maxSpeed, 1.0)
+                let massFactor = min(max(sizes[i] / maxParticleSize, 0.0), 1.0)
                 if i < halfCount {
-                    colors[i] = simd_float4(velocityToColor(t, settings), Float(settings.particleOpacity))
+                    let colorVec = velocityToColor(t, settings)
+                    let adjustedColor = mix(SIMD3<Float>(Float(0.2), Float(0.2), Float(0.2)), colorVec, Float(massFactor))
+                    let alpha = 0.6 * (1.0 - massFactor) + 1.0 * massFactor
+                    colors[i] = simd_float4(adjustedColor, alpha * Float(settings.particleOpacity))
                 } else {
                     if settings.useRandomColors {
-                        colors[i] = simd_float4(velocityToColorSecondGalaxy(t, settings), Float(settings.particleOpacity))
+                        let colorVec = velocityToColorSecondGalaxy(t, settings)
+                        let adjustedColor = mix(SIMD3<Float>(Float(0.2), Float(0.2), Float(0.2)), colorVec, Float(massFactor))
+                        let alpha = 0.6 * (1.0 - massFactor) + 1.0 * massFactor
+                        colors[i] = simd_float4(adjustedColor, alpha * Float(settings.particleOpacity))
                     } else {
-                        colors[i] = simd_float4(inverseVelocityToColor(t, settings), Float(settings.particleOpacity))
+                        let colorVec = inverseVelocityToColor(t, settings)
+                        let adjustedColor = mix(SIMD3<Float>(Float(0.2), Float(0.2), Float(0.2)), colorVec, Float(massFactor))
+                        let alpha = 0.6 * (1.0 - massFactor) + 1.0 * massFactor
+                        colors[i] = simd_float4(adjustedColor, alpha * Float(settings.particleOpacity))
                     }
                 }
             }
